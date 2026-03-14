@@ -1,4 +1,6 @@
 const root = @import("root.zig");
+const colors = @import("colors.zig");
+const std = @import("std");
 
 // Drivers
 const video = @import("drivers/video.zig");

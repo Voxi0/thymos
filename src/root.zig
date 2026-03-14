@@ -7,6 +7,20 @@ pub const c = @cImport({
 
 pub const std = @import("std");
 pub const arch = @import("arch/arch.zig").arch;
+const colors = @import("colors.zig");
+
+// Panic handler
+pub const panic = std.debug.FullPanic(panicHandler);
+fn panicHandler(msg: []const u8, firstTraceAddr: ?usize) noreturn {
+	_ = firstTraceAddr;
+
+	// Display error message
+	c.ssfn_dst.fg = colors.ERR_TEXT_COLOR;
+	printf("\n[PANIC] %s", msg.ptr);
+
+	// Halt CPU indefinitely
+	arch.halt();
+}
 
 // Link with all the functions that the tiny printf implementation offers
 // I'm setting the return type to `void` so I don't have to manually ignore them every single time I use any of these functions
