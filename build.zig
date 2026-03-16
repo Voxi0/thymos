@@ -91,7 +91,7 @@ pub fn build(b: *std.Build) void {
         .linkage = .static,
     });
     thymos.bundle_ubsan_rt = false;
-	thymos.use_llvm = true;
+    thymos.use_llvm = true;
     thymos.linker_script = b.path(b.fmt("src/arch/{s}/linker.ld", .{@tagName(arch)}));
     thymos.lto = .none;
     thymos.link_z_max_page_size = 0x1000;

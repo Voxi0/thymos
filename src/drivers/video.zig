@@ -29,6 +29,11 @@ const FONT = @embedFile("../fonts/unifont.sfn");
 pub const FONT_WIDTH: u8 = 8;
 pub const FONT_HEIGHT: u8 = 16;
 
+// Cursor
+const CURSOR_WIDTH: u8 = 1;
+var cursorLastX: c_int = 0;
+var cursorLastY: c_int = 0;
+
 /// Initialize the framebuffer by fetching the first one available. If there are none available then the OS is halted indefinitely.
 /// This function also initializes SSFN which is a library for rendering text on the screen. It uses `.sfn` font files.
 pub fn init(bgColor: u32, fgColor: u32) void {
@@ -54,14 +59,14 @@ pub fn init(bgColor: u32, fgColor: u32) void {
 // Drawing
 pub fn drawPixel(xpos: usize, ypos: usize, color: u32) VideoError!void {
     // Bounds checking
-    if (xpos >= fb.width or ypos >= fb.height) return VideoError.OutOfBounds;
+    if (xpos > fb.width or ypos > fb.height) return VideoError.OutOfBounds;
 
     const fbPtr: [*]u32 = @ptrCast(@alignCast(fb.address));
     fbPtr[ypos * pixelsPerRow + xpos] = color;
 }
 pub fn drawRect(xpos: usize, ypos: usize, width: usize, height: usize, color: u32) VideoError!void {
     // Bounds checking
-    if (xpos >= fb.width or ypos >= fb.height) return VideoError.OutOfBounds;
+    if (xpos > fb.width or ypos > fb.height) return VideoError.OutOfBounds;
 
     var fbPtr: [*]u32 = @ptrCast(@alignCast(fb.address));
     fbPtr += ypos * pixelsPerRow;
@@ -71,16 +76,6 @@ pub fn drawRect(xpos: usize, ypos: usize, width: usize, height: usize, color: u3
     }
 }
 pub fn drawLine(xpos1: isize, ypos1: isize, xpos2: isize, ypos2: isize, color: u32) VideoError!void {
-    // Ensure line doesn't start too far to the left or too far to the right
-    if (xpos1 < 0 or xpos2 < 0) {
-        return VideoError.OutOfBounds;
-    } else if (xpos1 >= fb.width or xpos2 >= fb.width) return VideoError.OutOfBounds;
-
-    // Ensure line doesn't start too high up or too low done
-    if (ypos1 < 0 or ypos2 < 0) {
-        return VideoError.OutOfBounds;
-    } else if (ypos1 >= fb.height or ypos2 >= fb.height) return VideoError.OutOfBounds;
-
     // Calculate change between X and Y position of the two points
     const dx: isize = @intCast(@abs(xpos2 - xpos1));
     const dy: isize = -@as(isize, @intCast(@abs(ypos2 - ypos1)));
@@ -93,13 +88,13 @@ pub fn drawLine(xpos1: isize, ypos1: isize, xpos2: isize, ypos2: isize, color: u
     var y: isize = ypos1;
     while (true) {
         try drawPixel(@intCast(x), @intCast(y), color);
-        if (x == xpos2 and y == ypos2) break;
         const e2 = 2 * err;
         if (e2 >= dy) {
+            if (x == xpos2) break;
             err += dy;
             x += sx;
-        }
-        if (e2 <= dx) {
+        } else if (e2 <= dx) {
+            if (y == ypos2) break;
             err += dx;
             y += sy;
         }
@@ -127,9 +122,16 @@ pub fn clearScreen() VideoError!void {
 /// Putchar implementation which is required for printf.
 /// This function is responsible for handling all special characters and drawing each character to the screen.
 export fn putchar_(char: u8) callconv(.c) void {
+    // Force cursor to correct pixel cell
+    c.ssfn_dst.x = @divTrunc(c.ssfn_dst.x, FONT_WIDTH) * FONT_WIDTH;
+    c.ssfn_dst.y = @divTrunc(c.ssfn_dst.y, FONT_HEIGHT) * FONT_HEIGHT;
+
     // Figure out the next cursor position
     const isXOffScreen: bool = (c.ssfn_dst.x + FONT_WIDTH) > fb.width;
     const isYOffScreen: bool = (c.ssfn_dst.y + FONT_HEIGHT) > fb.height;
+
+    // Draw over last cursor to 'delete' it
+    drawRect(@intCast(cursorLastX), @intCast(cursorLastY), CURSOR_WIDTH, FONT_HEIGHT, c.ssfn_dst.bg) catch |e| handleErr(e);
 
     // Handle special characters
     switch (char) {
@@ -144,10 +146,7 @@ export fn putchar_(char: u8) callconv(.c) void {
 
         // Backspace
         '\x08' => {
-            if ((c.ssfn_dst.x - FONT_WIDTH) < 0) {
-                return;
-            }
-            c.ssfn_dst.x -= FONT_WIDTH;
+            if (c.ssfn_dst.x > 0) c.ssfn_dst.x -= FONT_WIDTH;
             drawRect(@intCast(c.ssfn_dst.x), @intCast(c.ssfn_dst.y), FONT_WIDTH, FONT_HEIGHT, c.ssfn_dst.bg) catch |e| handleErr(e);
         },
 
@@ -161,4 +160,9 @@ export fn putchar_(char: u8) callconv(.c) void {
             _ = c.ssfn_putc(char);
         },
     }
+
+    // Draw new cursor and save it's position
+    drawRect(@intCast(c.ssfn_dst.x), @intCast(c.ssfn_dst.y), CURSOR_WIDTH, FONT_HEIGHT, c.ssfn_dst.fg) catch |e| handleErr(e);
+    cursorLastX = c.ssfn_dst.x;
+    cursorLastY = c.ssfn_dst.y;
 }

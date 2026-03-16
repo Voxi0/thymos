@@ -2,11 +2,13 @@
 //! APIC (Advanced Programmable Interrupt Controller) is modern and absolutely preferable but that is more complicated
 //! to use compared to the PIC so sticking with the 8259 PIC for the time being is an easier way to go.
 
+const io = @import("../cpu/io.zig");
+
 // Ports
 const PIC1_COMMAND: u8 = 0x20;
-const PIC1_DATA: u8 = 0x21;
+const PIC1_DATA: u8 = PIC1_COMMAND + 1;
 const PIC2_COMMAND: u8 = 0xA0;
-const PIC2_DATA: u8 = 0xA1;
+const PIC2_DATA: u8 = PIC2_COMMAND + 1;
 
 // Commands
 const PIC_EOI: u8 = 0x20;
@@ -27,90 +29,75 @@ const ICW4_BUF_SLAVE: u8 = 0x08;
 const ICW4_BUF_MASTER: u8 = 0x0C;
 const ICW4_SFNM: u8 = 0x10;
 
-fn outb(port: u16, value: u8) void {
-    asm volatile ("outb %[value], %[port]"
-        :
-        : [value] "{al}" (value),
-          [port] "{dx}" (port),
-        : .{ .memory = true }
-    );
-}
-fn inb(port: u16) u8 {
-    return asm volatile ("inb %[port], %[ret]"
-        : [ret] "={al}" (-> u8),
-        : [port] "{dx}" (port),
-        : .{ .memory = true }
-    );
-}
-fn ioWait() void {
-    outb(0x80, 0);
-}
-
 /// Initialize the PICs by remapping them so they don't conflict with software interrupts
-pub fn remap(offset1: u8, offset2: u8) void {
+pub fn remap(offset1: comptime_int, offset2: comptime_int) void {
     // Start initialization sequence in cascade mode
-    outb(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);
-    ioWait();
-    outb(PIC2_COMMAND, ICW1_INIT | ICW1_ICW4);
-    ioWait();
+    io.outb(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);
+    io.wait();
+    io.outb(PIC2_COMMAND, ICW1_INIT | ICW1_ICW4);
+    io.wait();
 
     // ICW2 - Set vector offets
-    outb(PIC1_DATA, offset1);
-    ioWait();
-    outb(PIC2_DATA, offset2);
-    ioWait();
+    io.outb(PIC1_DATA, offset1);
+    io.wait();
+    io.outb(PIC2_DATA, offset2);
+    io.wait();
 
     // ICW3 - Tell master PIC that there's a slave PIC at IRQ2 and tell slave PIC it's cascade identity
-    outb(PIC1_DATA, 1 << CASCADE_IRQ);
-    ioWait();
-    outb(PIC2_DATA, 2);
-    ioWait();
+    io.outb(PIC1_DATA, 0x4);
+    io.wait();
+    io.outb(PIC2_DATA, 0x2);
+    io.wait();
 
     // ICW4 - Make the PICs use 8086 mode instead of 8080
-    outb(PIC1_DATA, ICW4_8086);
-    ioWait();
-    outb(PIC2_DATA, ICW4_8086);
-    ioWait();
+    io.outb(PIC1_DATA, ICW4_8086);
+    io.wait();
+    io.outb(PIC2_DATA, ICW4_8086);
+    io.wait();
 
-    // Mask all hardware interrupts for initially
-    // Each interrupt has to be unmasked later on explicitly
-    outb(PIC1_DATA, 0xFF);
-    outb(PIC2_DATA, 0xFF);
+    // Mask all interrupts initially
+    io.outb(PIC1_DATA, 0xFF);
+    io.outb(PIC2_DATA, 0xFF);
 }
 
-// Mask/Unmask an IRQ line
-pub fn maskIrq(irq: u8) void {
+/// Mask/Unmask a hardware interrupt
+/// This allows us to control which hardware interrupts to ignore and which ones to not ignore
+pub fn maskIrq(irq: comptime_int) void {
     const port: u16 = if (irq < 8) PIC1_DATA else PIC2_DATA;
     const value: u8 = if (irq < 8) irq else irq - 8;
-    outb(port, inb(port) | (1 << value));
+    io.outb(port, io.inb(port) | (@as(u8, 1) << @intCast(value)));
 }
-pub fn unmaskIrq(irq: u8) void {
+pub fn unmaskIrq(irq: comptime_int) void {
     const port: u16 = if (irq < 8) PIC1_DATA else PIC2_DATA;
     const value: u8 = if (irq < 8) irq else irq - 8;
-    outb(port, inb(port) & ~(1 << value));
+    io.outb(port, io.inb(port) & ~(@as(u8, 1) << @intCast(value)));
 }
 
-/// Read the ISR (In-Service Register) and IRR (Interrupt Request Register)
+// Helper function
 fn getIrqReg(ocw3: u32) u16 {
-    outb(PIC1_COMMAND, ocw3);
-    outb(PIC2_COMMAND, ocw3);
-    return (inb(PIC2_COMMAND) << 8) | inb(PIC1_COMMAND);
+    io.outb(PIC1_COMMAND, @intCast(ocw3));
+    io.outb(PIC2_COMMAND, @intCast(ocw3));
+    return (@as(u16, io.inb(PIC2_DATA)) << 8) | @as(u16, io.inb(PIC1_DATA));
 }
-pub fn getIRR() u16 {
+
+/// Read the Interrupt Request Register (IRR)
+pub fn getIrr() u16 {
     return getIrqReg(PIC_READ_IRR);
 }
-pub fn getISR() u16 {
+
+/// Read the In-Service Register (ISR)
+pub fn getIsr() u16 {
     return getIrqReg(PIC_READ_ISR);
 }
 
-/// Signal that the interrupt has been handled
-pub fn sendEOI(irq: u8) void {
-    if (irq >= 8) outb(PIC2_COMMAND, PIC_EOI);
-    outb(PIC1_COMMAND, PIC_EOI);
+/// Tell the PICs that the hardware interrupt has been handled
+pub fn sendEoi(irq: u64) void {
+    if (irq >= 8) io.outb(PIC2_COMMAND, PIC_EOI);
+    io.outb(PIC1_COMMAND, PIC_EOI);
 }
 
-/// Disable PICs which must be done if we are to use processor local APIC and the IOAPIC
+/// Disable the PICs - Must be done before using the processor local APIC and the IOAPIC
 pub fn disable() void {
-    outb(PIC1_DATA, 0xFF);
-    outb(PIC2_DATA, 0xFF);
+    io.outb(PIC1_DATA, 0xFF);
+    io.outb(PIC2_DATA, 0xFF);
 }

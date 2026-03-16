@@ -7,4 +7,8 @@ const arch = switch (builtin.cpu.arch) {
 
 // Export architecture specific functions
 pub const initCPU = arch.initCPU;
+pub const io = arch.io;
+pub const irqRegisterHandler = arch.irqRegisterHandler;
+pub const irqDeregisterHandler = arch.irqDeregisterHandler;
 pub const halt = arch.halt;
+pub const idleHalt = arch.idleHalt;

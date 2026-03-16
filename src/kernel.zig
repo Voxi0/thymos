@@ -16,21 +16,32 @@ export fn _start() callconv(.c) noreturn {
     if (!c.LIMINE_BASE_REVISION_SUPPORTED(root.limineBaseRev)) arch.halt();
 
     // Initialize the video driver
-    video.init(0x000000, 0x00ff00);
+    video.init(colors.BG_COLOR, colors.TEXT_COLOR);
+    video.clearScreen() catch |e| video.handleErr(e);
 
     // Initialize architecture specific stuff
     arch.initCPU();
 
-    // Draw the UI
-    draw() catch |e| video.handleErr(e);
+    printf("Alright, we're ready\n");
+    asm volatile ("sti");
+    arch.irqRegisterHandler(1, &testHandler);
 
     // Halt CPU indefinitely
-    arch.halt();
+    arch.idleHalt();
 }
 
-// Initializes the video driver and draws stuff
-fn draw() video.VideoError!void {
-    try video.clearScreen();
+const scancodeTable = [_]u8{
+    0, 0, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\x08', // backspace
+    '\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[',  ']', '\n', // enter
+    0,    'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`', 0,
+    '\\', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 0,    '*', 0,
+    ' ',
+};
+fn testHandler(_: u8) void {
+    const scancode: u8 = arch.io.inb(0x60);
+    if (scancode < scancodeTable.len and scancodeTable[scancode] != 0) {
+        printf("%c", scancodeTable[scancode]);
+    }
 }
 
 // Panic handler

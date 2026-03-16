@@ -1,27 +1,20 @@
 .extern interruptHandler
 
 // Macros
-.macro isrErrStub interruptNum
-	isr_stub_\interruptNum:
-		// Pass the error code to the handler as the second argument
-		pop %rsi
-
-		// Call the interrupt handler
-		mov $\interruptNum, %rdi
-		call interruptHandler
-
-		// Return
-		iretq
-.endm
 .macro isrNoErrStub interruptNum
-	isr_stub_\interruptNum:
-		// Call the interrupt handler
-		mov $\interruptNum, %rdi
-		xor %rsi, %rsi
-		call interruptHandler
-
-		//Return
-		iretq
+    isr_stub_\interruptNum:
+		movq $0, %rsi
+        isrCommonStub \interruptNum
+.endm
+.macro isrErrStub interruptNum
+    isr_stub_\interruptNum:
+		pop %rsi
+		isrCommonStub \interruptNum
+.endm
+.macro isrCommonStub interruptNum
+	movq $\interruptNum, %rdi
+    call interruptHandler
+    iretq
 .endm
 
 // Load the GDT
@@ -31,19 +24,19 @@ loadGDT:
 
 	// Should point to the kernel code segment
 	// The kernel CS is the second entry in the GDT
-	push $0x08
+	pushq $0x08
 
 	// Reload code segments and perform a far return
-	lea .reloadCS(%rip), %rax
-	push %rax
+	leaq .reloadCS(%rip), %rax
+	pushq %rax
 	lretq
 .reloadCS:
-	mov $0x10, %ax
-	mov %ax, %ds
-    mov %ax, %es
-    mov %ax, %fs
-    mov %ax, %gs
-    mov %ax, %ss
+	movw $0x10, %ax
+	movw %ax, %ds
+    movw %ax, %es
+    movw %ax, %fs
+    movw %ax, %gs
+    movw %ax, %ss
 	ret
 
 // Load the IDT

@@ -1,8 +1,5 @@
 OS_NAME := thymos
-
-# Toolchain
 ARCH ?= x86_64
-ZIG_FLAGS := -Darch=$(ARCH) -Doptimize=Debug --prefix-exe-dir $(ARCH)
 
 # Directories
 INCLUDE_DIR := include
@@ -13,6 +10,10 @@ ISO_DIR := $(BUILD_DIR)/$(ARCH)/isodir
 # Files
 KERNEL := $(BUILD_DIR)/$(ARCH)/$(OS_NAME)
 ISO := $(BUILD_DIR)/$(ARCH)/$(OS_NAME).iso
+
+# Toolchain
+ZIG_FLAGS := -Darch=$(ARCH) -Doptimize=Debug --prefix-exe-dir $(ARCH)
+QEMU_FLAGS := --enable-kvm -cdrom $(ISO)
 
 # Default target
 all: kernel
@@ -42,7 +43,7 @@ fetchDeps:
 # Run/Emulate the OS in QEMU
 .PHONY: run
 run: iso
-	qemu-system-$(ARCH) --enable-kvm -m 512 -cdrom $(ISO)
+	qemu-system-$(ARCH) $(QEMU_FLAGS)
 
 # Build the kernel
 .PHONY: kernel
