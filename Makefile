@@ -40,6 +40,11 @@ fetchDeps:
 	curl https://raw.githubusercontent.com/eyalroz/printf/refs/heads/master/src/printf/printf.h -o $(INCLUDE_DIR)/printf/printf.h
 	curl https://raw.githubusercontent.com/eyalroz/printf/refs/heads/master/src/printf/printf.c -o $(INCLUDE_DIR)/printf/printf.c
 
+	@echo "[DEPS] Fetching uACPI (ACPI implementation)"
+	rm -rf $(INCLUDE_DIR)/uACPI
+	git clone https://github.com/uACPI/uACPI.git $(INCLUDE_DIR)/uACPI
+	rm -rf $(addprefix $(INCLUDE_DIR)/uACPI/, .git .github)
+
 # Run/Emulate the OS in QEMU
 .PHONY: run
 run: iso

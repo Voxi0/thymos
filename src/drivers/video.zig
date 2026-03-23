@@ -127,8 +127,8 @@ export fn putchar_(char: u8) callconv(.c) void {
     c.ssfn_dst.y = @divTrunc(c.ssfn_dst.y, FONT_HEIGHT) * FONT_HEIGHT;
 
     // Figure out the next cursor position
-    const isXOffScreen: bool = (c.ssfn_dst.x + FONT_WIDTH) > fb.width;
-    const isYOffScreen: bool = (c.ssfn_dst.y + FONT_HEIGHT) > fb.height;
+    const isXOffScreen: bool = (c.ssfn_dst.x + FONT_WIDTH + CURSOR_WIDTH) >= fb.width;
+    const isYOffScreen: bool = (c.ssfn_dst.y + FONT_HEIGHT) >= fb.height;
 
     // Draw over last cursor to 'delete' it
     drawRect(@intCast(cursorLastX), @intCast(cursorLastY), CURSOR_WIDTH, FONT_HEIGHT, c.ssfn_dst.bg) catch |e| handleErr(e);
@@ -153,8 +153,8 @@ export fn putchar_(char: u8) callconv(.c) void {
         // Normal character
         else => {
             // Ensure character stays inside the screen/framebuffer
+            if (isXOffScreen) _ = putchar_('\n');
             if (isYOffScreen) clearScreen() catch |e| handleErr(e);
-            if (isXOffScreen) _ = c.ssfn_putc('\n');
 
             // Render the character
             _ = c.ssfn_putc(char);

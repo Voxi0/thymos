@@ -37,3 +37,9 @@ pub const LIMINE_FRAMEBUFFER_REQUEST_ID = [4]u64{
     0x9d5827dcd881dd75,
     0xa3148604f6fab11b,
 };
+pub const LIMINE_RSDP_REQUEST_ID = [4]u64{
+    LIMINE_COMMON_MAGIC[0],
+    LIMINE_COMMON_MAGIC[1],
+    0xc5e77b6b397e7b43,
+    0x27637845accdcf3c,
+};

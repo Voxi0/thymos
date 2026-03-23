@@ -24,7 +24,7 @@ export fn _start() callconv(.c) noreturn {
 
     printf("Alright, we're ready\n");
     asm volatile ("sti");
-    arch.irqRegisterHandler(1, &testHandler);
+    arch.irqRegisterHandler(1, testHandler);
 
     // Halt CPU indefinitely
     arch.idleHalt();

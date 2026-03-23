@@ -131,7 +131,7 @@ export fn interruptHandler(irqNum: usize, errCode: usize) void {
     if (irqNum < 32) {
         c.ssfn_dst.fg = colors.ERR_TEXT_COLOR;
         printf("\n[CPU EXCEPTION %d] %s\n", irqNum, cpuExceptionMsg[irqNum].ptr);
-		if(errCode != 0) printf("[ERROR CODE] %d\n", errCode);
+        if (errCode != 0) printf("[ERROR CODE] %d\n", errCode);
     }
 
     // Hardware interrupts
